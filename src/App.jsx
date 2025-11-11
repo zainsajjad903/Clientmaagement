@@ -1,10 +1,30 @@
-import React from "react";
+import { BrowserRouter } from "react-router-dom";
+import AppRoutes from "./routes/AppRoutes.jsx";
+import Sidebar from "./components/Sidebar.jsx";
+import Navbar from "./components/Navbar.jsx";
+import { useState } from "react";
 
 export default function App() {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   return (
-    <div className="underline underline-offset-1">
-      {" "}
-      Hallo zain how are you? whats going on bro
-    </div>
+    <BrowserRouter>
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Sidebar
+          isCollapsed={isSidebarCollapsed}
+          toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
+        <div
+          className={`flex-1 transition-all duration-300 ${
+            isSidebarCollapsed ? "ml-20" : "ml-64"
+          }`}
+        >
+          <Navbar />
+          <main className="p-6">
+            <AppRoutes />
+          </main>
+        </div>
+      </div>
+    </BrowserRouter>
   );
 }
