@@ -1,16 +1,16 @@
 // AppRoutes.jsx
 import { Routes, Route } from "react-router-dom";
-import ClientManagement from "../pages/ClientManagement";
-import Communication from "../pages/Communication";
-import Dashboard from "../pages/Dashboard";
-import Followups from "../pages/Followups";
-import Notifications from "../pages/Notifications";
-import Settings from "../pages/Settings";
-import Team from "../pages/Team";
-import Reports from "../pages/Reports";
-import Documents from "../pages/Documents";
+import ClientManagement from "../pages/ClientManagement.jsx";
+import Communication from "../pages/Communication.jsx";
+import Dashboard from "../pages/Dashboard.jsx";
+import Followups from "../pages/Followups.jsx";
+import Notifications from "../pages/Notifications.jsx";
+import Settings from "../pages/Settings.jsx";
+import Team from "../pages/Team.jsx";
+import Reports from "../pages/Reports.jsx";
+import Documents from "../pages/Documents.jsx";
 // import { PiPackage } from "react-icons/pi";
-import Pipeline from "../pages/Pipeline";
+import Pipeline from "../pages/Pipeline.jsx";
 export default function AppRoutes() {
   return (
     <Routes>
