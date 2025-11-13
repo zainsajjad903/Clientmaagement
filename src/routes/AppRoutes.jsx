@@ -1,6 +1,6 @@
 // AppRoutes.jsx
 import { Routes, Route } from "react-router-dom";
-import Clients from "../pages/Clients";
+import ClientManagement from "../pages/ClientManagement";
 import Communication from "../pages/Communication";
 import Dashboard from "../pages/Dashboard";
 import Followups from "../pages/Followups";
@@ -15,7 +15,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Dashboard />} />
-      <Route path="/clients" element={<Clients />} />
+      <Route path="/clients" element={<ClientManagement />} />
       <Route path="/communication" element={<Communication />} />
       <Route path="/followups" element={<Followups />} />
       <Route path="/notifications" element={<Notifications />} />

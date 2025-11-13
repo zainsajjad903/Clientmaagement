@@ -22,7 +22,7 @@ import ClientForm from "../components/Clients/ClientForm";
 import BulkActions from "../components/Clients/BulkActions";
 import ClientStats from "../components/Clients/ClientStats";
 
-const Clients = () => {
+const ClientManagement = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showClientForm, setShowClientForm] = useState(false);
@@ -214,4 +214,4 @@ const Clients = () => {
   );
 };
 
-export default Clients;
+export default ClientManagement;
