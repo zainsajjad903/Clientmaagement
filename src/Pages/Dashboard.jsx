@@ -1,4 +1,5 @@
 // pages/Dashboard.jsx
+import { toast } from "react-toastify";
 import { useState, useEffect } from "react";
 import {
   FaUsers,
@@ -22,15 +23,25 @@ import UpcomingFollowups from "../components/Dashboard/UpcomingFollowups";
 import QuickActions from "../components/Dashboard/QuickActions";
 import ClientPipeline from "../components/Dashboard/ClientPipeline";
 import PlatformDistribution from "../components/Dashboard/PlatformDistribution";
+import ClientForm from "../components/Clients/ClientForm"; // ✅ Add this import
 
 const Dashboard = () => {
   const [timeRange, setTimeRange] = useState("monthly");
   const [loading, setLoading] = useState(true);
+  const [showClientForm, setShowClientForm] = useState(false); // ✅ Add this state
 
   // Mock data - replace with actual API calls
   useEffect(() => {
     setTimeout(() => setLoading(false), 1000);
   }, []);
+
+  // ✅ Add this function to handle adding clients
+  const handleAddClient = (clientData) => {
+    console.log("New client from dashboard:", clientData);
+    // Here you would typically make an API call to save the client
+    setShowClientForm(false);
+    toast.success("Client added successfully!");
+  };
 
   if (loading) {
     return (
@@ -41,7 +52,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 lg:p-6">
       {/* Header with Filters */}
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -66,7 +77,11 @@ const Dashboard = () => {
               <option value="yearly">This Year</option>
             </select>
 
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition duration-200">
+            {/* ✅ FIXED: Add onClick handler to the button */}
+            <button
+              onClick={() => setShowClientForm(true)} // ✅ This was missing!
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition duration-200"
+            >
               <FaPlus className="h-4 w-4" />
               <span>Add Client</span>
             </button>
@@ -103,6 +118,14 @@ const Dashboard = () => {
           <RecentActivities />
         </div>
       </div>
+
+      {/* ✅ ADD THIS: Client Form Modal */}
+      {showClientForm && (
+        <ClientForm
+          onSave={handleAddClient}
+          onClose={() => setShowClientForm(false)}
+        />
+      )}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 // components/Clients/ClientForm.jsx
 import { useState, useEffect } from "react";
 import { FaTimes, FaSave } from "react-icons/fa";
-
+import { toast } from "react-toastify";
 const ClientForm = ({ client, onSave, onClose }) => {
   const [formData, setFormData] = useState({
     name: "",
@@ -74,6 +74,11 @@ const ClientForm = ({ client, onSave, onClose }) => {
 
     if (validateForm()) {
       onSave(formData);
+      if (client) {
+        toast.success(`Client "${formData.name}" added successfully!`);
+      }
+    } else {
+      toast.error("Please fill all required fields correctly");
     }
   };
 

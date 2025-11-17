@@ -1,4 +1,5 @@
 // pages/Clients.jsx
+import { toast } from "react-toastify";
 import { useState, useEffect } from "react";
 import {
   FaPlus,
@@ -37,6 +38,7 @@ const ClientManagement = () => {
 
   // Mock data
   useEffect(() => {
+    const toastId = toast.loading("Loading clients...");
     const mockClients = [
       {
         id: 1,
@@ -60,6 +62,8 @@ const ClientManagement = () => {
     setTimeout(() => {
       setClients(mockClients);
       setLoading(false);
+      toast.dismiss(toastId);
+      toast.success(`${mockClients.length} clients loaded successfully!`);
     }, 1000);
   }, []);
 
@@ -73,6 +77,7 @@ const ClientManagement = () => {
     };
     setClients([newClient, ...clients]);
     setShowClientForm(false);
+    toast.success(`Client "${clientData.name}" added successfully!`);
   };
 
   // Update client
@@ -86,15 +91,57 @@ const ClientManagement = () => {
     );
     setEditingClient(null);
     setShowClientForm(false);
+    toast.success(`Client "${clientData.name}" updated successfully!`);
   };
 
   // Delete client
   const handleDeleteClient = (clientId) => {
-    if (window.confirm("Are you sure you want to delete this client?")) {
-      setClients(clients.filter((client) => client.id !== clientId));
-    }
-  };
+    const clientToDelete = clients.find((client) => client.id === clientId);
 
+    const ConfirmDeleteToast = ({ clientName, onConfirm, onCancel }) => (
+      <div className="p-4">
+        <p className="mb-4">
+          Are you sure you want to delete <strong>{clientName}</strong>?
+        </p>
+        <div className="flex space-x-2">
+          <button
+            onClick={onConfirm}
+            className="flex-1 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition duration-200"
+          >
+            Delete
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400 transition duration-200"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+
+    const toastId = toast(
+      <ConfirmDeleteToast
+        clientName={clientToDelete.name}
+        onConfirm={() => {
+          setClients(clients.filter((client) => client.id !== clientId));
+          toast.dismiss(toastId);
+          toast.success(
+            `Client "${clientToDelete.name}" deleted successfully!`
+          );
+        }}
+        onCancel={() => {
+          toast.dismiss(toastId);
+          toast.info("Deletion cancelled");
+        }}
+      />,
+      {
+        autoClose: false,
+        closeOnClick: false,
+        closeButton: false,
+      }
+    );
+  };
   // Bulk delete
   const handleBulkDelete = () => {
     if (selectedClients.length === 0) return;
@@ -107,6 +154,9 @@ const ClientManagement = () => {
         clients.filter((client) => !selectedClients.includes(client.id))
       );
       setSelectedClients([]);
+      toast.success(`${selectedClients.length} clients deleted successfully!`);
+    } else {
+      toast.info("Client deletion cancelled");
     }
   };
 
