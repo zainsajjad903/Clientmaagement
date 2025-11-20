@@ -35,7 +35,7 @@ const Dashboard = () => {
     setTimeout(() => setLoading(false), 1000);
   }, []);
 
-  // ✅ Add this function to handle adding clients
+  // Add this function to handle adding clients
   const handleAddClient = (clientData) => {
     console.log("New client from dashboard:", clientData);
     // Here you would typically make an API call to save the client

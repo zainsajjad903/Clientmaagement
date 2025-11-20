@@ -141,9 +141,8 @@ const Followups = () => {
     setTimeout(() => {
       setFollowups(mockFollowups);
       setLoading(false);
-      toast.success("Follow-ups loaded successfully!"); // MOVED INSIDE setTimeout
     }, 1000);
-  }, []); // REMOVED THE EXTRA TOAST OUTSIDE useEffect
+  }, []);
 
   // Add new follow-up
   const handleAddFollowup = (followupData) => {

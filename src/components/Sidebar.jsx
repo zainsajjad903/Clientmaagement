@@ -50,7 +50,7 @@ const Sidebar = ({ isCollapsed, toggleSidebar }) => {
     <div
       className={`${
         isCollapsed ? "w-20" : "w-64"
-      } bg-gradient-to-b from-gray-900 to-gray-800 border-r border-gray-700 text-white h-screen fixed transition-all duration-300 z-50 shadow-2xl flex flex-col`}
+      } bg-gradient-to-b from-[#23194F] to-[#1E1B3C] border-r border-gray-700 text-white h-screen fixed transition-all duration-300 z-50 shadow-2xl flex flex-col`}
     >
       {/* Header with Logo - Fixed height */}
       <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-700 h-20">
@@ -131,21 +131,6 @@ const Sidebar = ({ isCollapsed, toggleSidebar }) => {
             </button>
           </div>
         )}
-
-        {/* Settings Link
-        <Link
-          to="/settings"
-          className={`flex items-center gap-4 p-3 rounded-xl transition-all duration-200 group ${
-            location.pathname === "/settings"
-              ? "bg-blue-600 text-white shadow-lg shadow-blue-500/25"
-              : "text-gray-300 hover:bg-gray-700 hover:text-white"
-          }`}
-        >
-          <FaCog className="text-lg" />
-          {!isCollapsed && (
-            <span className="font-medium tracking-wide">Settings</span>
-          )}
-        </Link> */}
 
         {/* Version Info */}
         <div className="text-center mt-4">
