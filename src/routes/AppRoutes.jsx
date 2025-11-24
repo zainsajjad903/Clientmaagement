@@ -9,8 +9,7 @@ import Settings from "../pages/Settings.jsx";
 import Team from "../pages/Team.jsx";
 import Reports from "../pages/Reports.jsx";
 import Documents from "../pages/Documents.jsx";
-// import { PiPackage } from "react-icons/pi";
-import Pipeline from "../pages/Pipeline.jsx";
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -23,8 +22,6 @@ export default function AppRoutes() {
       <Route path="/team" element={<Team />} />
       <Route path="/reports" element={<Reports />} />
       <Route path="/documents" element={<Documents />} />
-      {/* <Route path="/pipeline" element={<PiPackage />} /> */}
-      <Route path="/pipeline" element={<Pipeline />} />
     </Routes>
   );
 }

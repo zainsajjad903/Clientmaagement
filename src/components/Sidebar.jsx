@@ -40,7 +40,7 @@ const Sidebar = ({ isCollapsed, toggleSidebar }) => {
     { path: "/communication", icon: FaRegCommentDots, label: "Communication" },
     { path: "/followups", icon: FaBell, label: "Follow-ups" },
     { path: "/documents", icon: FaFileAlt, label: "Documents" },
-    { path: "/pipeline", icon: FaProjectDiagram, label: "Pipeline" },
+
     { path: "/reports", icon: FaChartBar, label: "Reports" },
     { path: "/team", icon: FaUserFriends, label: "Team" },
     { path: "/settings", icon: FaCog, label: "Settings" },
