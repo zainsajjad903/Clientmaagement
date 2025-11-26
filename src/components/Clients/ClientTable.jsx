@@ -89,6 +89,30 @@ const ClientTable = ({
     );
   };
 
+  // ✅ Safe date formatter (handles "", undefined, invalid, Firestore Timestamp)
+  const formatFollowUpDate = (value) => {
+    if (!value) return { label: "-", tag: "" };
+
+    let date;
+
+    // Firestore Timestamp case
+    if (value.seconds) {
+      date = new Date(value.seconds * 1000);
+    } else {
+      date = new Date(value);
+    }
+
+    if (isNaN(date.getTime())) {
+      return { label: "-", tag: "" };
+    }
+
+    const label = date.toLocaleDateString();
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+
+    return { label, tag: isToday ? "Today" : "" };
+  };
+
   if (clients.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
@@ -171,127 +195,129 @@ const ClientTable = ({
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {clients.map((client) => (
-              <tr
-                key={client.id}
-                className="hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-150"
-              >
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <button
-                    onClick={() => handleSelectClient(client.id)}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    {selectedClients.includes(client.id) ? (
-                      <FaCheckSquare className="h-4 w-4" />
-                    ) : (
-                      <FaSquare className="h-4 w-4" />
-                    )}
-                  </button>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
-                      {client.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {client.name}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {client.company}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">
-                    {client.email}
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {client.phone}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {getPlatformBadge(client.platform)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {getStatusBadge(client.status)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">
-                    {client.projectType}
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {client.budget}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">
-                    {new Date(client.nextFollowUp).toLocaleDateString()}
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(client.nextFollowUp).toLocaleDateString() ===
-                    new Date().toLocaleDateString()
-                      ? "Today"
-                      : ""}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex items-center justify-end space-x-2">
-                    {/* Communication Buttons */}
-                    <button
-                      onClick={() =>
-                        window.open(`tel:${client.phone}`, "_blank")
-                      }
-                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded transition duration-150"
-                      title="Call"
-                    >
-                      <FaPhone className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() =>
-                        window.open(`mailto:${client.email}`, "_blank")
-                      }
-                      className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 p-1 rounded transition duration-150"
-                      title="Email"
-                    >
-                      <FaEnvelope className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() =>
-                        window.open(
-                          `https://wa.me/${client.phone.replace(/\D/g, "")}`,
-                          "_blank"
-                        )
-                      }
-                      className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 p-1 rounded transition duration-150"
-                      title="WhatsApp"
-                    >
-                      <FaWhatsapp className="h-4 w-4" />
-                    </button>
+            {clients.map((client) => {
+              const { label: followUpLabel, tag: followUpTag } =
+                formatFollowUpDate(client.nextFollowUp);
 
-                    {/* Action Buttons */}
+              return (
+                <tr
+                  key={client.id}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-150"
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => onEditClient(client)}
-                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded transition duration-150"
-                      title="Edit"
+                      onClick={() => handleSelectClient(client.id)}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                     >
-                      <FaEdit className="h-4 w-4" />
+                      {selectedClients.includes(client.id) ? (
+                        <FaCheckSquare className="h-4 w-4" />
+                      ) : (
+                        <FaSquare className="h-4 w-4" />
+                      )}
                     </button>
-                    <button
-                      onClick={() => onDeleteClient(client.id)}
-                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1 rounded transition duration-150"
-                      title="Delete"
-                    >
-                      <FaTrash className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                        {client.name
+                          ?.split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {client.name}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {client.company}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {client.email}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {client.phone}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getPlatformBadge(client.platform)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getStatusBadge(client.status)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {client.projectType}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {client.budget}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {followUpLabel}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {followUpTag}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-2">
+                      {/* Communication Buttons */}
+                      <button
+                        onClick={() =>
+                          window.open(`tel:${client.phone}`, "_blank")
+                        }
+                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded transition duration-150"
+                        title="Call"
+                      >
+                        <FaPhone className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() =>
+                          window.open(`mailto:${client.email}`, "_blank")
+                        }
+                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 p-1 rounded transition duration-150"
+                        title="Email"
+                      >
+                        <FaEnvelope className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() =>
+                          window.open(
+                            `https://wa.me/${client.phone.replace(/\D/g, "")}`,
+                            "_blank"
+                          )
+                        }
+                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 p-1 rounded transition duration-150"
+                        title="WhatsApp"
+                      >
+                        <FaWhatsapp className="h-4 w-4" />
+                      </button>
+
+                      {/* Action Buttons */}
+                      <button
+                        onClick={() => onEditClient(client)}
+                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded transition duration-150"
+                        title="Edit"
+                      >
+                        <FaEdit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteClient(client.id)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1 rounded transition duration-150"
+                        title="Delete"
+                      >
+                        <FaTrash className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

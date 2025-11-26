@@ -16,6 +16,18 @@ import {
   FaWhatsapp,
 } from "react-icons/fa";
 
+// Firebase imports
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db } from "../firebase";
+
 // Import components
 import ClientTable from "../components/Clients/ClientTable";
 import ClientFilters from "../components/Clients/ClientFilters";
@@ -36,65 +48,93 @@ const ClientManagement = () => {
     dateRange: "all",
   });
 
-  // Mock data
-  useEffect(() => {
-    const toastId = toast.loading("Loading clients...");
-    const mockClients = [
-      {
-        id: 1,
-        name: "Sarah Johnson",
-        email: "sarah@techcorp.com",
-        phone: "+1 (555) 123-4567",
-        company: "TechCorp Inc",
-        platform: "Upwork",
-        status: "active",
-        projectType: "Web Development",
-        budget: "$15,000",
-        lastContact: "2024-01-15",
-        nextFollowUp: "2024-01-22",
-        tags: ["VIP", "Retainer"],
-        addedBy: "John Doe",
-        notes: "Interested in e-commerce website",
-      },
-      // ... other mock clients (same as before)
-    ];
+  const clientsCollection = collection(db, "clients");
 
-    setTimeout(() => {
-      setClients(mockClients);
-      setLoading(false);
-      toast.dismiss(toastId);
-      toast.success(`${mockClients.length} clients loaded successfully!`);
-    }, 1000);
+  // Load clients from Firestore
+  useEffect(() => {
+    const loadClients = async () => {
+      const toastId = toast.loading("Loading clients...");
+      try {
+        const snapshot = await getDocs(clientsCollection);
+        const data = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+        setClients(data);
+        toast.success(`${data.length} clients loaded successfully!`);
+      } catch (error) {
+        console.error("Error loading clients:", error);
+        toast.error("Failed to load clients");
+      } finally {
+        setLoading(false);
+        toast.dismiss(toastId);
+      }
+    };
+
+    loadClients();
   }, []);
 
-  // Add new client
-  const handleAddClient = (clientData) => {
-    const newClient = {
-      id: clients.length + 1,
-      ...clientData,
-      createdAt: new Date().toISOString(),
-      addedBy: "Current User",
-    };
-    setClients([newClient, ...clients]);
-    setShowClientForm(false);
-    toast.success(`Client "${clientData.name}" added successfully!`);
+  // Add new client (Firestore + state)
+  const handleAddClient = async (clientData) => {
+    try {
+      console.log("Adding client...", clientData);
+
+      const docRef = await addDoc(clientsCollection, {
+        ...clientData,
+        createdAt: serverTimestamp(),
+        addedBy: "Current User",
+      });
+
+      const newClient = {
+        id: docRef.id,
+        ...clientData,
+        createdAt: new Date().toISOString(),
+        addedBy: "Current User",
+      };
+
+      setClients((prev) => [newClient, ...prev]);
+      setShowClientForm(false);
+      toast.success(`Client "${clientData.name}" added successfully!`);
+    } catch (error) {
+      console.error("Error adding client:", error);
+      toast.error(`Failed to add client: ${error.message}`);
+    }
   };
 
-  // Update client
-  const handleUpdateClient = (clientData) => {
-    setClients(
-      clients.map((client) =>
-        client.id === editingClient.id
-          ? { ...client, ...clientData, updatedAt: new Date().toISOString() }
-          : client
-      )
-    );
-    setEditingClient(null);
-    setShowClientForm(false);
-    toast.success(`Client "${clientData.name}" updated successfully!`);
-  };
+  // Update client (Firestore + state)
+  const handleUpdateClient = async (clientData) => {
+    if (!editingClient) return;
 
-  // Delete client
+    try {
+      console.log("Updating client...", editingClient.id, clientData);
+
+      const ref = doc(db, "clients", editingClient.id);
+      await updateDoc(ref, {
+        ...clientData,
+        updatedAt: serverTimestamp(),
+      });
+
+      setClients((prev) =>
+        prev.map((client) =>
+          client.id === editingClient.id
+            ? {
+                ...client,
+                ...clientData,
+                updatedAt: new Date().toISOString(),
+              }
+            : client
+        )
+      );
+
+      setEditingClient(null);
+      setShowClientForm(false);
+      toast.success(`Client "${clientData.name}" updated successfully!`);
+    } catch (error) {
+      console.error("Error updating client:", error);
+      toast.error(`Failed to update client: ${error.message}`);
+    }
+  };
+  // Delete client (with Firestore)
   const handleDeleteClient = (clientId) => {
     const clientToDelete = clients.find((client) => client.id === clientId);
 
@@ -122,13 +162,21 @@ const ClientManagement = () => {
 
     const toastId = toast(
       <ConfirmDeleteToast
-        clientName={clientToDelete.name}
-        onConfirm={() => {
-          setClients(clients.filter((client) => client.id !== clientId));
-          toast.dismiss(toastId);
-          toast.success(
-            `Client "${clientToDelete.name}" deleted successfully!`
-          );
+        clientName={clientToDelete?.name}
+        onConfirm={async () => {
+          try {
+            await deleteDoc(doc(db, "clients", clientId));
+            setClients((prev) =>
+              prev.filter((client) => client.id !== clientId)
+            );
+            toast.dismiss(toastId);
+            toast.success(
+              `Client "${clientToDelete?.name || ""}" deleted successfully!`
+            );
+          } catch (error) {
+            console.error("Error deleting client:", error);
+            toast.error("Failed to delete client");
+          }
         }}
         onCancel={() => {
           toast.dismiss(toastId);
@@ -142,33 +190,48 @@ const ClientManagement = () => {
       }
     );
   };
-  // Bulk delete
-  const handleBulkDelete = () => {
+
+  // Bulk delete (Firestore + state)
+  const handleBulkDelete = async () => {
     if (selectedClients.length === 0) return;
-    if (
-      window.confirm(
-        `Are you sure you want to delete ${selectedClients.length} clients?`
-      )
-    ) {
-      setClients(
-        clients.filter((client) => !selectedClients.includes(client.id))
-      );
-      setSelectedClients([]);
-      toast.success(`${selectedClients.length} clients deleted successfully!`);
-    } else {
+
+    const confirm = window.confirm(
+      `Are you sure you want to delete ${selectedClients.length} clients?`
+    );
+
+    if (!confirm) {
       toast.info("Client deletion cancelled");
+      return;
+    }
+
+    try {
+      await Promise.all(
+        selectedClients.map((id) => deleteDoc(doc(db, "clients", id)))
+      );
+
+      setClients((prev) =>
+        prev.filter((client) => !selectedClients.includes(client.id))
+      );
+      toast.success(`${selectedClients.length} clients deleted successfully!`);
+      setSelectedClients([]);
+    } catch (error) {
+      console.error("Error bulk deleting clients:", error);
+      toast.error("Failed to bulk delete clients");
     }
   };
 
   // Filter clients
   const filteredClients = clients.filter((client) => {
+    const search = filters.search.toLowerCase();
+
     const matchesSearch =
-      client.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-      client.email.toLowerCase().includes(filters.search.toLowerCase()) ||
-      client.company.toLowerCase().includes(filters.search.toLowerCase());
+      client.name?.toLowerCase().includes(search) ||
+      client.email?.toLowerCase().includes(search) ||
+      client.company?.toLowerCase().includes(search);
 
     const matchesStatus =
       filters.status === "all" || client.status === filters.status;
+
     const matchesPlatform =
       filters.platform === "all" || client.platform === filters.platform;
 

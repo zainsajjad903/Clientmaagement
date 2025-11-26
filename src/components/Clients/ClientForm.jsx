@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { FaTimes, FaSave } from "react-icons/fa";
 import { toast } from "react-toastify";
+
 const ClientForm = ({ client, onSave, onClose }) => {
   const [formData, setFormData] = useState({
     name: "",
@@ -71,12 +72,10 @@ const ClientForm = ({ client, onSave, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    console.log("Client form submitted", formData); // debug line
 
     if (validateForm()) {
       onSave(formData);
-      if (client) {
-        toast.success(`Client "${formData.name}" added successfully!`);
-      }
     } else {
       toast.error("Please fill all required fields correctly");
     }
@@ -317,7 +316,7 @@ const ClientForm = ({ client, onSave, onClose }) => {
             </div>
           </div>
 
-          {/* Form Actions - Responsive buttons */}
+          {/* Form Actions */}
           <div className="flex flex-col-reverse xs:flex-row xs:items-center xs:justify-end gap-3 mt-6 lg:mt-8 pt-4 lg:pt-6 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
