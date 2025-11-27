@@ -12,17 +12,29 @@ import {
   FaSun,
 } from "react-icons/fa";
 
+// Firebase imports
+import { db } from "../firebase"; // apne project ke hisaab se path adjust kar sakte ho
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+} from "firebase/firestore";
+
 const Navbar = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [notifications, setNotifications] = useState([]); // ✅ ab state se aayega
   const location = useLocation();
 
   const notificationsRef = useRef(null);
   const userMenuRef = useRef(null);
 
-  // Get current page title
+  // ---------- helpers ----------
+
   const getPageTitle = () => {
     const path = location.pathname;
     const titles = {
@@ -39,7 +51,49 @@ const Navbar = () => {
     return titles[path] || "Dashboard";
   };
 
-  // Close dropdowns when clicking outside
+  const getRelativeTime = (date) => {
+    if (!date) return "";
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMinutes < 1) return "Just now";
+    if (diffMinutes < 60) return `${diffMinutes} min ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const toJsDate = (value, fallback = new Date()) => {
+    if (!value) return fallback;
+    // Firestore Timestamp
+    if (value.seconds) {
+      return new Date(value.seconds * 1000);
+    }
+    // ISO string / millis
+    try {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) return d;
+      return fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const mergeAndSortNotifications = (items) => {
+    return items
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 20)
+      .map((n) => ({
+        ...n,
+        unread: true, // filhal sab ko unread rakhen ge
+      }));
+  };
+
+  // ---------- outside click handling ----------
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -57,8 +111,10 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ---------- dark mode ----------
+
   const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
+    setDarkMode((prev) => !prev);
     document.documentElement.classList.toggle("dark");
   };
 
@@ -66,41 +122,75 @@ const Navbar = () => {
     e.preventDefault();
     if (searchQuery.trim()) {
       console.log("Searching for:", searchQuery);
-      // Implement search functionality
+      // TODO: implement actual search
     }
   };
 
-  // Mock notifications data
-  const notifications = [
-    {
-      id: 1,
-      type: "new_client",
-      message: "New client - John Smith added",
-      time: "5 min ago",
-      unread: true,
-    },
-    {
-      id: 2,
-      type: "followup",
-      message: "Follow-up with Sarah due tomorrow",
-      time: "1 hour ago",
-      unread: true,
-    },
-    {
-      id: 3,
-      type: "message",
-      message: "New message from Michael Brown",
-      time: "2 hours ago",
-      unread: false,
-    },
-    {
-      id: 4,
-      type: "document",
-      message: "Contract signed by Emily Johnson",
-      time: "1 day ago",
-      unread: false,
-    },
-  ];
+  // ---------- Firestore notifications ----------
+
+  useEffect(() => {
+    // communications (latest)
+    const commRef = collection(db, "communications");
+    const commQuery = query(commRef, orderBy("createdAt", "desc"), limit(10));
+
+    const unsubComm = onSnapshot(commQuery, (snapshot) => {
+      const commNotifs = snapshot.docs.map((doc) => {
+        const data = doc.data() || {};
+        const clientName = data.client?.name || "Client";
+        const createdAt = data.createdAt
+          ? toJsDate(data.createdAt)
+          : data.date
+          ? toJsDate(data.date)
+          : new Date();
+
+        return {
+          id: `comm-${doc.id}`,
+          type: "communication",
+          message:
+            data.subject && clientName
+              ? `${clientName}: ${data.subject}`
+              : "New communication logged",
+          time: getRelativeTime(createdAt),
+          createdAt,
+        };
+      });
+
+      setNotifications((prev) => {
+        const others = prev.filter((n) => !n.id.startsWith("comm-"));
+        return mergeAndSortNotifications([...others, ...commNotifs]);
+      });
+    });
+
+    // followups (latest)
+    const followRef = collection(db, "followups");
+    const followQuery = query(followRef, orderBy("dueDate", "desc"), limit(10));
+
+    const unsubFollow = onSnapshot(followQuery, (snapshot) => {
+      const followNotifs = snapshot.docs.map((doc) => {
+        const data = doc.data() || {};
+        const clientName = data.client?.name || "Client";
+        const dueDate = data.dueDate ? toJsDate(data.dueDate) : new Date();
+
+        return {
+          id: `follow-${doc.id}`,
+          type: "followup",
+          message: `Follow-up with ${clientName} due ${dueDate.toLocaleDateString()}`,
+          time: getRelativeTime(dueDate),
+          createdAt: dueDate,
+        };
+      });
+
+      setNotifications((prev) => {
+        const others = prev.filter((n) => !n.id.startsWith("follow-"));
+        return mergeAndSortNotifications([...others, ...followNotifs]);
+      });
+    });
+
+    return () => {
+      unsubComm();
+      unsubFollow();
+    };
+  }, []);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
@@ -178,45 +268,51 @@ const Navbar = () => {
                   </div>
 
                   <div className="max-h-96 overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={`px-4 py-3 border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition duration-150 ${
-                          notification.unread
-                            ? "bg-blue-50 dark:bg-blue-900/20"
-                            : ""
-                        }`}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <div
-                            className={`p-2 rounded-full ${
-                              notification.unread
-                                ? "bg-blue-100 dark:bg-blue-800"
-                                : "bg-gray-100 dark:bg-gray-700"
-                            }`}
-                          >
-                            <FaBell
-                              className={`h-4 w-4 ${
-                                notification.unread
-                                  ? "text-blue-600 dark:text-blue-400"
-                                  : "text-gray-500 dark:text-gray-400"
-                              }`}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {notification.message}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              {notification.time}
-                            </p>
-                          </div>
-                          {notification.unread && (
-                            <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                          )}
-                        </div>
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        No notifications yet.
                       </div>
-                    ))}
+                    ) : (
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`px-4 py-3 border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition duration-150 ${
+                            notification.unread
+                              ? "bg-blue-50 dark:bg-blue-900/20"
+                              : ""
+                          }`}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div
+                              className={`p-2 rounded-full ${
+                                notification.unread
+                                  ? "bg-blue-100 dark:bg-blue-800"
+                                  : "bg-gray-100 dark:bg-gray-700"
+                              }`}
+                            >
+                              <FaBell
+                                className={`h-4 w-4 ${
+                                  notification.unread
+                                    ? "text-blue-600 dark:text-blue-400"
+                                    : "text-gray-500 dark:text-gray-400"
+                                }`}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {notification.message}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                {notification.time}
+                              </p>
+                            </div>
+                            {notification.unread && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
 
                   <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700">
