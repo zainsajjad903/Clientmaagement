@@ -8,6 +8,7 @@ import {
   FaUser,
   FaClock,
   FaCalendar,
+  FaComment,
 } from "react-icons/fa";
 
 const CommunicationLog = ({ communications }) => {

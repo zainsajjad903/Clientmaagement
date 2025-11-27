@@ -5,17 +5,12 @@ import {
   FaClock,
   FaUser,
   FaStickyNote,
-  FaPhone,
-  FaEnvelope,
-  FaVideo,
-  FaWhatsapp,
-  FaTasks,
   FaExclamationTriangle,
   FaCheck,
   FaTimes,
 } from "react-icons/fa";
 
-const FollowupForm = ({ followup, onSave, onClose }) => {
+const FollowupForm = ({ followup, clients = [], onSave, onClose }) => {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -37,51 +32,37 @@ const FollowupForm = ({ followup, onSave, onClose }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Mock clients data
-  const clients = [
-    { id: 1, name: "Sarah Johnson", company: "TechCorp Inc", avatar: "SJ" },
-    {
-      id: 2,
-      name: "Mike Thompson",
-      company: "Design Studio LLC",
-      avatar: "MT",
-    },
-    {
-      id: 3,
-      name: "Emily Davis",
-      company: "Startup Innovations",
-      avatar: "ED",
-    },
-    {
-      id: 4,
-      name: "Robert Wilson",
-      company: "Business Consulting Co",
-      avatar: "RW",
-    },
-    {
-      id: 5,
-      name: "Lisa Chen",
-      company: "Digital Agency Partners",
-      avatar: "LC",
-    },
-  ];
-
+  // Static team members (UI only)
   const teamMembers = [
     { id: "john", name: "John Doe" },
     { id: "jane", name: "Jane Smith" },
   ];
 
-  // Initialize form with followup data if editing
+  // Helper: convert followup.dueDate (string or Timestamp) -> JS Date
+  const parseDueDate = (value) => {
+    if (!value) return null;
+    if (value.seconds) {
+      // Firestore Timestamp
+      return new Date(value.seconds * 1000);
+    }
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  // Initialize form with followup data if editing, otherwise set defaults
   useEffect(() => {
     if (followup) {
-      const dueDate = new Date(followup.dueDate);
+      const dueDateObj = parseDueDate(followup.dueDate);
+
       setFormData({
         title: followup.title || "",
         description: followup.description || "",
         type: followup.type || "call",
         priority: followup.priority || "medium",
-        dueDate: dueDate.toISOString().split("T")[0],
-        dueTime: dueDate.toTimeString().slice(0, 5),
+        dueDate: dueDateObj
+          ? dueDateObj.toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        dueTime: dueDateObj ? dueDateObj.toTimeString().slice(0, 5) : "09:00",
         assignedTo: followup.assignedTo || "",
         notes: followup.notes || "",
         status: followup.status || "pending",
@@ -93,7 +74,7 @@ const FollowupForm = ({ followup, onSave, onClose }) => {
         },
       });
     } else {
-      // Set default values for new followup
+      // New followup – default tomorrow 9:00 AM and first client if available
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -101,10 +82,23 @@ const FollowupForm = ({ followup, onSave, onClose }) => {
         ...prev,
         dueDate: tomorrow.toISOString().split("T")[0],
         dueTime: "09:00",
-        client: clients[0] || { id: "", name: "", company: "", avatar: "" },
+        client:
+          prev.client.id || clients.length === 0
+            ? prev.client
+            : {
+                id: clients[0].id,
+                name: clients[0].name,
+                company: clients[0].company || "",
+                avatar:
+                  clients[0].name
+                    ?.split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase() || "",
+              },
       }));
     }
-  }, [followup]);
+  }, [followup, clients]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -113,7 +107,6 @@ const FollowupForm = ({ followup, onSave, onClose }) => {
       [name]: value,
     }));
 
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -124,15 +117,29 @@ const FollowupForm = ({ followup, onSave, onClose }) => {
 
   const handleClientChange = (e) => {
     const clientId = e.target.value;
-    const selectedClient = clients.find(
-      (client) => client.id === parseInt(clientId)
-    );
+    const selectedClient =
+      clients.find((client) => client.id === clientId) ||
+      clients.find((client) => client.id === parseInt(clientId)); // in case ids were numeric
 
     if (selectedClient) {
       setFormData((prev) => ({
         ...prev,
-        client: selectedClient,
+        client: {
+          id: selectedClient.id,
+          name: selectedClient.name,
+          company: selectedClient.company || "",
+          avatar:
+            selectedClient.avatar ||
+            selectedClient.name
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .toUpperCase(),
+        },
       }));
+      if (errors.client) {
+        setErrors((prev) => ({ ...prev, client: "" }));
+      }
     }
   };
 
@@ -143,7 +150,7 @@ const FollowupForm = ({ followup, onSave, onClose }) => {
       newErrors.title = "Title is required";
     }
 
-    if (!formData.client.id) {
+    if (!formData.client || !formData.client.id) {
       newErrors.client = "Please select a client";
     }
 
@@ -174,44 +181,26 @@ const FollowupForm = ({ followup, onSave, onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
 
     try {
-      // Combine date and time
+      // Combine date and time into ISO string
       const dueDateTime = new Date(`${formData.dueDate}T${formData.dueTime}`);
-
-      const followupData = {
+      const payload = {
         ...formData,
         dueDate: dueDateTime.toISOString(),
-        // Remove the client object and use the structure your Followups page expects
         client: {
           id: formData.client.id,
           name: formData.client.name,
           company: formData.client.company,
           avatar: formData.client.avatar,
         },
-        // Add fields that your Followups page expects
-        id: followup ? followup.id : Date.now(), // Use simple ID
-        reminderSent: false,
-        createdAt: followup ? followup.createdAt : new Date().toISOString(),
       };
 
-      // Remove the client nested object if it's causing issues
-      const { client, ...submitData } = followupData;
-      const finalData = {
-        ...submitData,
-        ...client, // Flatten client properties
-      };
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Call save function - pass the properly structured data
-      onSave(finalData);
+      // Firestore write is handled in Followups.jsx (handleAddFollowup / handleUpdateFollowup)
+      onSave(payload);
     } catch (error) {
       console.error("Error saving follow-up:", error);
     } finally {

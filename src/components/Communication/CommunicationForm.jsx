@@ -1,8 +1,8 @@
 // src/components/Communication/CommunicationForm.jsx
 import { useState, useEffect } from "react";
-import { FaTimes, FaSave, FaPaperclip, FaUser } from "react-icons/fa";
+import { FaTimes, FaSave, FaUser } from "react-icons/fa";
 
-const CommunicationForm = ({ client, onSave, onClose }) => {
+const CommunicationForm = ({ client, clients = [], onSave, onClose }) => {
   const [formData, setFormData] = useState({
     clientId: "",
     type: "call",
@@ -22,20 +22,12 @@ const CommunicationForm = ({ client, onSave, onClose }) => {
   const [errors, setErrors] = useState({});
   const [newParticipant, setNewParticipant] = useState("");
 
-  // Mock clients - replace with actual data
-  const clients = [
-    { id: 1, name: "Sarah Johnson", company: "TechCorp Inc" },
-    { id: 2, name: "Mike Thompson", company: "Design Studio LLC" },
-    { id: 3, name: "Emily Davis", company: "Startup Innovations" },
-    { id: 4, name: "Robert Wilson", company: "Business Consulting Co" },
-    { id: 5, name: "Lisa Chen", company: "Digital Agency Partners" },
-  ];
-
+  // Pre-select client if passed from quick action
   useEffect(() => {
     if (client) {
       setFormData((prev) => ({
         ...prev,
-        clientId: client.id.toString(),
+        clientId: client.id?.toString() || "",
       }));
     }
   }, [client]);
@@ -56,13 +48,11 @@ const CommunicationForm = ({ client, onSave, onClose }) => {
   };
 
   const handleAddParticipant = () => {
-    if (
-      newParticipant.trim() &&
-      !formData.participants.includes(newParticipant.trim())
-    ) {
+    const value = newParticipant.trim();
+    if (value && !formData.participants.includes(value)) {
       setFormData((prev) => ({
         ...prev,
-        participants: [...prev.participants, newParticipant.trim()],
+        participants: [...prev.participants, value],
       }));
       setNewParticipant("");
     }
@@ -89,16 +79,32 @@ const CommunicationForm = ({ client, onSave, onClose }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (validateForm()) {
-      const selectedClient = clients.find(
-        (c) => c.id.toString() === formData.clientId
-      );
-      onSave({
-        ...formData,
-        client: selectedClient,
-        date: `${formData.date}T${formData.time}:00`,
-      });
-    }
+    if (!validateForm()) return;
+
+    // 🔹 Get selected client from Firestore-backed list
+    const selectedClient = clients.find(
+      (c) => c.id?.toString() === formData.clientId
+    );
+
+    const payload = {
+      ...formData,
+      client: selectedClient
+        ? {
+            id: selectedClient.id,
+            name: selectedClient.name,
+            company: selectedClient.company || "",
+            avatar:
+              selectedClient.avatar ||
+              selectedClient.name
+                ?.split(" ")
+                .map((n) => n[0])
+                .join(""),
+          }
+        : null,
+      date: `${formData.date}T${formData.time}:00`,
+    };
+
+    onSave(payload);
   };
 
   return (
@@ -143,9 +149,9 @@ const CommunicationForm = ({ client, onSave, onClose }) => {
                 } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               >
                 <option value="">Select a client</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name} - {client.company}
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.company ? `- ${c.company}` : ""}
                   </option>
                 ))}
               </select>

@@ -17,15 +17,33 @@ import {
   FaDownload,
 } from "react-icons/fa";
 
+import { toast } from "react-toastify";
+
+// 🔹 Firebase imports
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  serverTimestamp,
+  doc,
+} from "firebase/firestore";
+import { db } from "../firebase";
+
 // Import components we'll create
 import FollowupStats from "../components/Followups/FollowupStats";
 import FollowupFilters from "../components/Followups/FollowupFilters";
 import FollowupList from "../components/Followups/FollowupList";
 import FollowupForm from "../components/Followups/FollowupForm";
-import { toast } from "react-toastify";
+
+// 🔹 Firestore collection references
+const followupsCollectionRef = collection(db, "followups");
+const clientsCollectionRef = collection(db, "clients");
 
 const Followups = () => {
   const [followups, setFollowups] = useState([]);
+  const [clients, setClients] = useState([]); // 🔹 clients from DB
   const [loading, setLoading] = useState(true);
   const [showFollowupForm, setShowFollowupForm] = useState(false);
   const [editingFollowup, setEditingFollowup] = useState(null);
@@ -34,160 +52,112 @@ const Followups = () => {
     status: "all",
     priority: "all",
     type: "all",
-    dateRange: "today",
+    dateRange: "all",
   });
 
-  // Mock data - replace with API calls
+  //  Realtime listener for follow-ups (replaces mock data)
   useEffect(() => {
-    const mockFollowups = [
-      {
-        id: 1,
-        client: {
-          id: 1,
-          name: "Sarah Johnson",
-          company: "TechCorp Inc",
-          avatar: "SJ",
-        },
-        type: "call",
-        title: "Project Update Discussion",
-        description: "Discuss the latest project milestones and next steps",
-        dueDate: "2024-01-15T14:30:00",
-        priority: "high",
-        status: "pending",
-        assignedTo: "John Doe",
-        createdAt: "2024-01-10T09:00:00",
-        notes: "Client waiting for budget approval",
-        reminderSent: false,
-      },
-      {
-        id: 2,
-        client: {
-          id: 2,
-          name: "Mike Thompson",
-          company: "Design Studio LLC",
-          avatar: "MT",
-        },
-        type: "email",
-        title: "Proposal Follow-up",
-        description: "Follow up on the proposal sent last week",
-        dueDate: "2024-01-14T10:00:00",
-        priority: "medium",
-        status: "overdue",
-        assignedTo: "Jane Smith",
-        createdAt: "2024-01-07T14:20:00",
-        notes: "Client mentioned they'll review by Friday",
-        reminderSent: true,
-      },
-      {
-        id: 3,
-        client: {
-          id: 3,
-          name: "Emily Davis",
-          company: "Startup Innovations",
-          avatar: "ED",
-        },
-        type: "meeting",
-        title: "Contract Review",
-        description: "Review and sign the service agreement",
-        dueDate: "2024-01-18T15:00:00",
-        priority: "high",
-        status: "pending",
-        assignedTo: "John Doe",
-        createdAt: "2024-01-12T11:30:00",
-        notes: "Legal team has approved the terms",
-        reminderSent: false,
-      },
-      {
-        id: 4,
-        client: {
-          id: 4,
-          name: "Robert Wilson",
-          company: "Business Consulting Co",
-          avatar: "RW",
-        },
-        type: "whatsapp",
-        title: "Quick Check-in",
-        description: "Check if they received the deliverables",
-        dueDate: "2024-01-16T16:00:00",
-        priority: "low",
-        status: "pending",
-        assignedTo: "Jane Smith",
-        createdAt: "2024-01-13T08:45:00",
-        notes: "Client usually responds quickly on WhatsApp",
-        reminderSent: false,
-      },
-      {
-        id: 5,
-        client: {
-          id: 5,
-          name: "Lisa Chen",
-          company: "Digital Agency Partners",
-          avatar: "LC",
-        },
-        type: "call",
-        title: "Emergency Bug Discussion",
-        description: "Discuss critical bug found in production",
-        dueDate: "2024-01-11T18:00:00",
-        priority: "high",
-        status: "completed",
-        assignedTo: "John Doe",
-        createdAt: "2024-01-11T16:30:00",
-        notes: "Issue resolved successfully",
-        reminderSent: true,
-        completedAt: "2024-01-11T18:45:00",
-      },
-    ];
+    const toastId = toast.loading("Loading follow-ups...");
 
-    setTimeout(() => {
-      setFollowups(mockFollowups);
-      setLoading(false);
-    }, 1000);
+    const unsubscribe = onSnapshot(
+      followupsCollectionRef,
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+
+        console.log("Realtime follow-ups from Firestore:", data);
+        setFollowups(data);
+        setLoading(false);
+        toast.dismiss(toastId);
+        toast.success(`${data.length} follow-ups loaded successfully!`);
+      },
+      (error) => {
+        console.error("onSnapshot error (followups):", error);
+        setLoading(false);
+        toast.dismiss(toastId);
+        toast.error(`Failed to load follow-ups: ${error.message}`);
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
-  // Add new follow-up
-  const handleAddFollowup = (followupData) => {
-    const newFollowup = {
-      id: Date.now(), // Use timestamp for unique ID
-      ...followupData,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      reminderSent: false,
-    };
-    setFollowups([newFollowup, ...followups]);
-    setShowFollowupForm(false);
-    toast.success(
-      `Follow-up with ${
-        followupData.client?.name || "client"
-      } scheduled successfully!`
+  // 🔹 Realtime listener for clients (same as Clients/Communication pages)
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      clientsCollectionRef,
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+        console.log("Realtime clients for Followups page:", data);
+        setClients(data);
+      },
+      (error) => {
+        console.error("onSnapshot error (clients):", error);
+      }
     );
+
+    return () => unsubscribe();
+  }, []);
+
+  // 🔹 Add new follow-up (save to Firestore)
+  const handleAddFollowup = async (followupData) => {
+    try {
+      await addDoc(followupsCollectionRef, {
+        ...followupData,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        reminderSent: false,
+      });
+
+      setShowFollowupForm(false);
+      toast.success(
+        `Follow-up with ${
+          followupData.client?.name || "client"
+        } scheduled successfully!`
+      );
+    } catch (error) {
+      console.error("Error adding follow-up:", error);
+      toast.error(`Failed to add follow-up: ${error.message}`);
+    }
   };
 
-  // Update follow-up
-  const handleUpdateFollowup = (followupData) => {
-    setFollowups(
-      followups.map((followup) =>
-        followup.id === editingFollowup.id
-          ? {
-              ...followup,
-              ...followupData,
-              updatedAt: new Date().toISOString(),
-            }
-          : followup
-      )
-    );
-    setEditingFollowup(null);
-    setShowFollowupForm(false);
-    toast.success("Follow-up updated successfully!");
+  // 🔹 Update follow-up (Firestore)
+  const handleUpdateFollowup = async (followupData) => {
+    if (!editingFollowup) return;
+
+    try {
+      const ref = doc(db, "followups", editingFollowup.id);
+      await updateDoc(ref, {
+        ...followupData,
+        updatedAt: serverTimestamp(),
+      });
+
+      setEditingFollowup(null);
+      setShowFollowupForm(false);
+      toast.success("Follow-up updated successfully!");
+    } catch (error) {
+      console.error("Error updating follow-up:", error);
+      toast.error(`Failed to update follow-up: ${error.message}`);
+    }
   };
 
-  // Delete follow-up
+  // 🔹 Delete follow-up (Firestore)
   const handleDeleteFollowup = (followupId) => {
     const followupToDelete = followups.find((f) => f.id === followupId);
 
-    // Custom confirmation toast
-    const confirmDelete = () => {
-      setFollowups(followups.filter((followup) => followup.id !== followupId));
-      toast.success(`Follow-up deleted successfully!`);
+    const confirmDelete = async () => {
+      try {
+        await deleteDoc(doc(db, "followups", followupId));
+        toast.success(`Follow-up deleted successfully!`);
+      } catch (error) {
+        console.error("Error deleting follow-up:", error);
+        toast.error(`Failed to delete follow-up: ${error.message}`);
+      }
     };
 
     toast.info(
@@ -197,13 +167,13 @@ const Followups = () => {
         </div>
         <p className="text-gray-600 dark:text-gray-400 mb-4">
           Are you sure you want to delete the follow-up with{" "}
-          {followupToDelete.client?.name || "unknown client"}?
+          {followupToDelete?.client?.name || "unknown client"}?
         </p>
         <div className="flex space-x-3 justify-end">
           <button
-            onClick={() => {
+            onClick={async () => {
               toast.dismiss();
-              confirmDelete();
+              await confirmDelete();
             }}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200"
           >
@@ -227,52 +197,65 @@ const Followups = () => {
     );
   };
 
-  // Mark as completed
-  const handleMarkCompleted = (followupId) => {
-    setFollowups(
-      followups.map((followup) =>
-        followup.id === followupId
-          ? {
-              ...followup,
-              status: "completed",
-              completedAt: new Date().toISOString(),
-            }
-          : followup
-      )
-    );
+  // 🔹 Mark as completed (Firestore)
+  const handleMarkCompleted = async (followupId) => {
     const followup = followups.find((f) => f.id === followupId);
-    toast.success(
-      `Follow-up with ${followup.client?.name || "client"} marked as completed!`
-    );
+    if (!followup) return;
+
+    try {
+      const ref = doc(db, "followups", followupId);
+      await updateDoc(ref, {
+        status: "completed",
+        completedAt: serverTimestamp(),
+      });
+
+      toast.success(
+        `Follow-up with ${
+          followup.client?.name || "client"
+        } marked as completed!`
+      );
+    } catch (error) {
+      console.error("Error marking follow-up completed:", error);
+      toast.error(`Failed to update follow-up: ${error.message}`);
+    }
   };
 
-  // Snooze follow-up
-  const handleSnooze = (followupId, days = 1) => {
-    setFollowups(
-      followups.map((followup) => {
-        if (followup.id === followupId) {
-          const newDate = new Date(followup.dueDate);
-          newDate.setDate(newDate.getDate() + days);
-          return {
-            ...followup,
-            dueDate: newDate.toISOString(),
-            reminderSent: false,
-          };
-        }
-        return followup;
-      })
-    );
+  // 🔹 Snooze follow-up (Firestore)
+  const handleSnooze = async (followupId, days = 1) => {
     const followup = followups.find((f) => f.id === followupId);
-    toast.info(
-      `Follow-up with ${
-        followup.client?.name || "client"
-      } snoozed for ${days} day(s)`
-    );
+    if (!followup || !followup.dueDate) return;
+
+    let baseDate;
+    if (followup.dueDate.seconds) {
+      baseDate = new Date(followup.dueDate.seconds * 1000);
+    } else {
+      baseDate = new Date(followup.dueDate);
+    }
+
+    if (isNaN(baseDate.getTime())) return;
+
+    baseDate.setDate(baseDate.getDate() + days);
+
+    try {
+      const ref = doc(db, "followups", followupId);
+      await updateDoc(ref, {
+        dueDate: baseDate.toISOString(),
+        reminderSent: false,
+      });
+
+      toast.info(
+        `Follow-up with ${
+          followup.client?.name || "client"
+        } snoozed for ${days} day(s)`
+      );
+    } catch (error) {
+      console.error("Error snoozing follow-up:", error);
+      toast.error(`Failed to snooze follow-up: ${error.message}`);
+    }
   };
 
-  // Filter follow-ups with safe access
+  // 🔹 Filter follow-ups with safe access (and Timestamp support)
   const filteredFollowups = followups.filter((followup) => {
-    // Safe access to client properties
     const clientName = followup.client?.name || "";
     const title = followup.title || "";
     const description = followup.description || "";
@@ -289,19 +272,27 @@ const Followups = () => {
     const matchesType =
       filters.type === "all" || followup.type === filters.type;
 
-    // Date filtering with safe date handling
     let matchesDate = true;
-    if (followup.dueDate) {
-      const dueDate = new Date(followup.dueDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
 
-      if (filters.dateRange === "today") {
-        matchesDate = dueDate.toDateString() === today.toDateString();
-      } else if (filters.dateRange === "overdue") {
-        matchesDate = dueDate < today && followup.status !== "completed";
-      } else if (filters.dateRange === "upcoming") {
-        matchesDate = dueDate > today && followup.status !== "completed";
+    if (followup.dueDate) {
+      let dueDate;
+      if (followup.dueDate.seconds) {
+        dueDate = new Date(followup.dueDate.seconds * 1000);
+      } else {
+        dueDate = new Date(followup.dueDate);
+      }
+
+      if (!isNaN(dueDate.getTime())) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (filters.dateRange === "today") {
+          matchesDate = dueDate.toDateString() === today.toDateString();
+        } else if (filters.dateRange === "overdue") {
+          matchesDate = dueDate < today && followup.status !== "completed";
+        } else if (filters.dateRange === "upcoming") {
+          matchesDate = dueDate > today && followup.status !== "completed";
+        }
       }
     }
 
@@ -376,6 +367,7 @@ const Followups = () => {
       {showFollowupForm && (
         <FollowupForm
           followup={editingFollowup}
+          clients={clients} // 🔹 same clients as Clients/Communication
           onSave={editingFollowup ? handleUpdateFollowup : handleAddFollowup}
           onClose={() => {
             setShowFollowupForm(false);

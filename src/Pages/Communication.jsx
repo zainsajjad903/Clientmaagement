@@ -17,15 +17,29 @@ import {
   FaClock,
 } from "react-icons/fa";
 
-// Import components we'll create
+// Firebase imports
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db } from "../firebase";
+
+// Import components
 import CommunicationStats from "../components/Communication/CommunicationStats";
 import CommunicationFilters from "../components/Communication/CommunicationFilters";
 import CommunicationLog from "../components/Communication/CommunicationLog";
 import CommunicationForm from "../components/Communication/CommunicationForm";
 import QuickActions from "../components/Communication/QuickActions";
 
+// Firestore collection references
+const communicationsCollectionRef = collection(db, "communications");
+const clientsCollectionRef = collection(db, "clients");
+
 const Communication = () => {
   const [communications, setCommunications] = useState([]);
+  const [clients, setClients] = useState([]); // 🔹 all clients from DB
   const [loading, setLoading] = useState(true);
   const [showCommunicationForm, setShowCommunicationForm] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
@@ -36,176 +50,108 @@ const Communication = () => {
     dateRange: "7days",
   });
 
-  // Mock data - replace with API calls
+  // 🔹 Realtime listener for communications
   useEffect(() => {
-    const mockCommunications = [
-      {
-        id: 1,
-        client: {
-          id: 1,
-          name: "Sarah Johnson",
-          company: "TechCorp Inc",
-          avatar: "SJ",
-        },
-        type: "call",
-        subject: "Project Kickoff Discussion",
-        summary:
-          "Discussed project requirements and timeline. Client provided initial feedback on the proposal.",
-        date: "2024-01-15T14:30:00",
-        duration: "30 minutes",
-        status: "completed",
-        followUpRequired: true,
-        followUpDate: "2024-01-22",
-        files: [],
-        participants: ["John Doe", "Sarah Johnson"],
-        notes:
-          "Client seems excited about the project. Need to send updated proposal by Wednesday.",
-      },
-      {
-        id: 2,
-        client: {
-          id: 2,
-          name: "Mike Thompson",
-          company: "Design Studio LLC",
-          avatar: "MT",
-        },
-        type: "email",
-        subject: "Proposal Feedback",
-        summary:
-          "Sent updated proposal and received positive feedback. Waiting for final confirmation.",
-        date: "2024-01-14T10:15:00",
-        duration: null,
-        status: "completed",
-        followUpRequired: true,
-        followUpDate: "2024-01-18",
-        files: ["proposal_v2.pdf"],
-        participants: ["Jane Smith", "Mike Thompson"],
-        notes: "Client requested minor changes to payment terms.",
-      },
-      {
-        id: 3,
-        client: {
-          id: 3,
-          name: "Emily Davis",
-          company: "Startup Innovations",
-          avatar: "ED",
-        },
-        type: "meeting",
-        subject: "Design Review Session",
-        summary:
-          "Walked through the initial design mockups. Client provided detailed feedback on user experience.",
-        date: "2024-01-13T15:45:00",
-        duration: "45 minutes",
-        status: "completed",
-        followUpRequired: false,
-        followUpDate: null,
-        files: ["design_mockups.pdf", "feedback.docx"],
-        participants: ["John Doe", "Emily Davis", "Design Team"],
-        notes:
-          "Client loved the overall direction. Need to incorporate feedback on mobile responsiveness.",
-      },
-      {
-        id: 4,
-        client: {
-          id: 4,
-          name: "Robert Wilson",
-          company: "Business Consulting Co",
-          avatar: "RW",
-        },
-        type: "whatsapp",
-        subject: "Quick Update",
-        summary:
-          "Client confirmed receipt of deliverables and scheduled next review meeting.",
-        date: "2024-01-12T09:20:00",
-        duration: "5 minutes",
-        status: "completed",
-        followUpRequired: true,
-        followUpDate: "2024-01-19",
-        files: [],
-        participants: ["Jane Smith", "Robert Wilson"],
-        notes: "Client mentioned potential referral opportunity.",
-      },
-      {
-        id: 5,
-        client: {
-          id: 5,
-          name: "Lisa Chen",
-          company: "Digital Agency Partners",
-          avatar: "LC",
-        },
-        type: "call",
-        subject: "Emergency Bug Fix",
-        summary:
-          "Discussed critical bug in production environment. Coordinated immediate fix deployment.",
-        date: "2024-01-11T18:30:00",
-        duration: "25 minutes",
-        status: "completed",
-        followUpRequired: true,
-        followUpDate: "2024-01-12",
-        files: ["bug_report.pdf"],
-        participants: ["John Doe", "Lisa Chen", "Dev Team"],
-        notes:
-          "Issue resolved. Need to follow up tomorrow to confirm stability.",
-      },
-    ];
+    const toastId = toast.loading("Loading communications...");
 
-    setTimeout(() => {
-      setCommunications(mockCommunications);
-      setLoading(false);
-    }, 1000);
+    const unsubscribe = onSnapshot(
+      communicationsCollectionRef,
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+
+        console.log("Realtime communications from Firestore:", data);
+        setCommunications(data);
+        setLoading(false);
+        toast.dismiss(toastId);
+        toast.success(`${data.length} communications loaded successfully!`);
+      },
+      (error) => {
+        console.error("onSnapshot error (communications):", error);
+        setLoading(false);
+        toast.dismiss(toastId);
+        toast.error(`Failed to load communications: ${error.message}`);
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
-  // Add new communication
-  const handleAddCommunication = (communicationData) => {
-    const newCommunication = {
-      id: communications.length + 1,
-      ...communicationData,
-      createdAt: new Date().toISOString(),
-      addedBy: "Current User",
-    };
-    setCommunications([newCommunication, ...communications]);
-    setShowCommunicationForm(false);
-    setSelectedClient(null);
-    toast.success("Communication logged successfully!");
+  // 🔹 Realtime listener for clients (same collection as Clients page)
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      clientsCollectionRef,
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+        console.log("Realtime clients for Communication page:", data);
+        setClients(data);
+      },
+      (error) => {
+        console.error("onSnapshot error (clients):", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // 🔹 Add new communication (save to Firestore)
+  const handleAddCommunication = async (communicationData) => {
+    try {
+      console.log("Adding communication..", communicationData);
+
+      await addDoc(communicationsCollectionRef, {
+        ...communicationData,
+        createdAt: serverTimestamp(),
+        addedBy: "Current User",
+      });
+
+      // Realtime listener khud list update karega
+      setShowCommunicationForm(false);
+      setSelectedClient(null);
+      toast.success("Communication logged successfully!");
+    } catch (error) {
+      console.error("Error logging communication:", error);
+      toast.error(`Failed to log communication: ${error.message}`);
+    }
   };
 
-  // Filter communications
+  // 🔹 Filters
   const filteredCommunications = communications.filter((communication) => {
+    const search = filters.search.toLowerCase();
+
     const matchesSearch =
-      communication.client.name
-        .toLowerCase()
-        .includes(filters.search.toLowerCase()) ||
-      communication.subject
-        .toLowerCase()
-        .includes(filters.search.toLowerCase()) ||
-      communication.summary
-        .toLowerCase()
-        .includes(filters.search.toLowerCase());
+      communication.client?.name?.toLowerCase().includes(search) ||
+      communication.subject?.toLowerCase().includes(search) ||
+      communication.summary?.toLowerCase().includes(search);
 
     const matchesType =
       filters.type === "all" || communication.type === filters.type;
+
     const matchesClient =
       filters.client === "all" ||
-      communication.client.id.toString() === filters.client;
+      communication.client?.id?.toString() === filters.client;
 
     return matchesSearch && matchesType && matchesClient;
   });
 
-  // Quick action handlers
+  // 🔹 Quick action handlers
   const handleQuickAction = (action, client = null) => {
     setSelectedClient(client);
     setShowCommunicationForm(true);
 
-    // Define action messages
     const actionMessages = {
       call: "Log a phone call",
       email: "Log an email",
       meeting: "Schedule a meeting",
       whatsapp: "Send WhatsApp message",
-      followup: "Plan a follow-up", // Added the missing followup key
+      followup: "Plan a follow-up",
     };
 
-    // Show toast for quick action
     toast.info(`Ready to ${actionMessages[action]}`);
   };
 
@@ -253,10 +199,14 @@ const Communication = () => {
       <CommunicationStats communications={communications} />
 
       {/* Quick Actions */}
-      <QuickActions onQuickAction={handleQuickAction} />
+      <QuickActions onQuickAction={handleQuickAction} clients={clients} />
 
       {/* Filters Section */}
-      <CommunicationFilters filters={filters} onFiltersChange={setFilters} />
+      <CommunicationFilters
+        filters={filters}
+        onFiltersChange={setFilters}
+        clients={clients} // 🔹 so dropdown can show real clients if you use it
+      />
 
       {/* Communication Log */}
       <CommunicationLog communications={filteredCommunications} />
@@ -265,6 +215,7 @@ const Communication = () => {
       {showCommunicationForm && (
         <CommunicationForm
           client={selectedClient}
+          clients={clients} // 🔹 yahan form ke liye real clients list
           onSave={handleAddCommunication}
           onClose={() => {
             setShowCommunicationForm(false);
