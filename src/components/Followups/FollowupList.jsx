@@ -10,6 +10,7 @@ import {
   FaTrash,
   FaExclamationTriangle,
   FaUser,
+  FaCalendarAlt,
 } from "react-icons/fa";
 
 const FollowupList = ({
