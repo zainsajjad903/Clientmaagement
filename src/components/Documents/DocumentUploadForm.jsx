@@ -13,6 +13,10 @@ import {
   FaStickyNote,
 } from "react-icons/fa";
 
+// Firebase
+import { db } from "../../firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+
 const DocumentUploadForm = ({ document, onSave, onClose }) => {
   const [formData, setFormData] = useState({
     name: "",
@@ -33,14 +37,9 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
   const [errors, setErrors] = useState({});
   const [file, setFile] = useState(null);
 
-  // Mock clients data
-  const clients = [
-    { id: 1, name: "Sarah Johnson", company: "TechCorp Inc" },
-    { id: 2, name: "Mike Thompson", company: "Design Studio LLC" },
-    { id: 3, name: "Emily Davis", company: "Startup Innovations" },
-    { id: 4, name: "Robert Wilson", company: "Business Consulting Co" },
-    { id: 5, name: "Lisa Chen", company: "Digital Agency Partners" },
-  ];
+  // Clients from Firestore
+  const [clients, setClients] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
 
   const fileTypes = [
     { value: "pdf", label: "PDF", icon: FaFilePdf },
@@ -60,8 +59,39 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
     { value: "other", label: "Other" },
   ];
 
-  // Initialize form with document data if editing
+  // Load clients from Firestore
   useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "clients"),
+      (snapshot) => {
+        const data = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            name: d.name || "",
+            company: d.company || d.businessName || "",
+          };
+        });
+
+        setClients(data);
+        setClientsLoading(false);
+      },
+      (error) => {
+        console.error("Error loading clients in DocumentUploadForm:", error);
+        setClientsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Initialize form with document data if editing OR default client when clients are loaded
+  useEffect(() => {
+    if (!clients.length) {
+      // Wait until we have clients before initializing defaults
+      return;
+    }
+
     if (document) {
       setFormData({
         name: document.name || "",
@@ -75,13 +105,16 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
         newTag: "",
       });
     } else {
-      // Set default values for new document
+      // New document → set default client if none assigned yet
       setFormData((prev) => ({
         ...prev,
-        client: clients[0] || { id: "", name: "", company: "" },
+        client:
+          prev.client.id || !clients.length
+            ? prev.client
+            : clients[0] || { id: "", name: "", company: "" },
       }));
     }
-  }, [document]);
+  }, [document, clients]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -90,7 +123,6 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
       [name]: value,
     }));
 
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -102,7 +134,7 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
   const handleClientChange = (e) => {
     const clientId = e.target.value;
     const selectedClient = clients.find(
-      (client) => client.id === parseInt(clientId)
+      (client) => client.id === clientId || client.id === parseInt(clientId, 10)
     );
 
     if (selectedClient) {
@@ -110,6 +142,9 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
         ...prev,
         client: selectedClient,
       }));
+      if (errors.client) {
+        setErrors((prev) => ({ ...prev, client: "" }));
+      }
     }
   };
 
@@ -119,11 +154,10 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
       setFile(selectedFile);
       setFormData((prev) => ({
         ...prev,
-        name: selectedFile.name,
+        name: prev.name || selectedFile.name,
         size: (selectedFile.size / (1024 * 1024)).toFixed(1) + " MB",
       }));
 
-      // Determine file type based on extension
       const extension = selectedFile.name.split(".").pop().toLowerCase();
       const fileTypeMap = {
         pdf: "pdf",
@@ -141,6 +175,10 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
         ...prev,
         fileType: fileTypeMap[extension] || "other",
       }));
+
+      if (errors.file) {
+        setErrors((prev) => ({ ...prev, file: "" }));
+      }
     }
   };
 
@@ -204,33 +242,34 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
     setIsSubmitting(true);
 
     try {
+      const clientAvatar =
+        formData.client.name
+          ?.split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase() || "";
+
       const documentData = {
-        ...formData,
-        // Remove the client object and use the structure your Documents page expects
+        name: formData.name,
+        description: formData.description,
+        type: formData.type,
+        fileType: formData.fileType,
+        size: formData.size,
         client: {
           id: formData.client.id,
           name: formData.client.name,
           company: formData.client.company,
-          avatar: formData.client.name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .toUpperCase(),
+          avatar: clientAvatar,
         },
-        // Add fields that your Documents page expects
-        id: document ? document.id : Date.now(),
-        uploadedBy: document ? document.uploadedBy : "Current User",
-        uploadedAt: document ? document.uploadedAt : new Date().toISOString(),
-        downloadUrl: "#",
-        previewUrl: "#",
+        tags: formData.tags || [],
       };
 
-      // Simulate file upload
+      // Simulate file upload (replace later with Firebase Storage)
       if (file) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
 
-      // Call save function
+      // Let Documents.jsx handle Firestore write
       onSave(documentData);
     } catch (error) {
       console.error("Error saving document:", error);
@@ -239,7 +278,7 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
     }
   };
 
-  // FIXED: Return component reference instead of JSX
+  // Not used yet but kept for future UI enhancements
   const getFileIcon = (fileType) => {
     const icons = {
       pdf: FaFilePdf,
@@ -381,13 +420,16 @@ const DocumentUploadForm = ({ document, onSave, onClose }) => {
             <select
               value={formData.client.id}
               onChange={handleClientChange}
+              disabled={clientsLoading}
               className={`w-full bg-white dark:bg-gray-700 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 errors.client
                   ? "border-red-500"
                   : "border-gray-300 dark:border-gray-600"
               }`}
             >
-              <option value="">Select a client</option>
+              <option value="">
+                {clientsLoading ? "Loading clients..." : "Select a client"}
+              </option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
                   {client.name} - {client.company}

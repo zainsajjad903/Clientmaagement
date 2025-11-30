@@ -88,7 +88,7 @@ const Navbar = () => {
       .slice(0, 20)
       .map((n) => ({
         ...n,
-        unread: true, // filhal sab ko unread rakhen ge
+        unread: true,
       }));
   };
 

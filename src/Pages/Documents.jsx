@@ -1,28 +1,23 @@
 // src/pages/Documents.jsx
 import { useState, useEffect } from "react";
-import {
-  FaPlus,
-  FaSearch,
-  FaFilter,
-  FaDownload,
-  FaEye,
-  FaTrash,
-  FaEdit,
-  FaFilePdf,
-  FaFileWord,
-  FaFileExcel,
-  FaFileImage,
-  FaFileAlt,
-  FaFolder,
-  FaCloudUploadAlt,
-} from "react-icons/fa";
+import { FaPlus, FaDownload, FaCloudUploadAlt } from "react-icons/fa";
 
-// Import components we'll create
 import DocumentStats from "../components/Documents/DocumentStats";
 import DocumentFilters from "../components/Documents/DocumentFilters";
 import DocumentList from "../components/Documents/DocumentList";
 import DocumentUploadForm from "../components/Documents/DocumentUploadForm";
 import { toast } from "react-toastify";
+
+// Firebase
+import { db } from "../firebase";
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 
 const Documents = () => {
   const [documents, setDocuments] = useState([]);
@@ -36,164 +31,116 @@ const Documents = () => {
     dateRange: "all",
   });
 
-  // Mock data - replace with API calls
+  // Load documents from Firestore
   useEffect(() => {
-    const mockDocuments = [
-      {
-        id: 1,
-        name: "Project Proposal - TechCorp",
-        type: "proposal",
-        fileType: "pdf",
-        size: "2.4 MB",
-        client: {
-          id: 1,
-          name: "Sarah Johnson",
-          company: "TechCorp Inc",
-        },
-        uploadedBy: "John Doe",
-        uploadedAt: "2024-01-10T09:00:00",
-        description: "Initial project proposal with scope and pricing",
-        tags: ["proposal", "contract", "important"],
-        downloadUrl: "#",
-        previewUrl: "#",
-      },
-      {
-        id: 2,
-        name: "Service Agreement",
-        type: "contract",
-        fileType: "docx",
-        size: "1.2 MB",
-        client: {
-          id: 2,
-          name: "Mike Thompson",
-          company: "Design Studio LLC",
-        },
-        uploadedBy: "Jane Smith",
-        uploadedAt: "2024-01-08T14:20:00",
-        description: "Signed service agreement",
-        tags: ["contract", "signed"],
-        downloadUrl: "#",
-        previewUrl: "#",
-      },
-      {
-        id: 3,
-        name: "Invoice_January_2024",
-        type: "invoice",
-        fileType: "pdf",
-        size: "0.8 MB",
-        client: {
-          id: 1,
-          name: "Sarah Johnson",
-          company: "TechCorp Inc",
-        },
-        uploadedBy: "John Doe",
-        uploadedAt: "2024-01-05T11:30:00",
-        description: "Monthly service invoice",
-        tags: ["invoice", "billing"],
-        downloadUrl: "#",
-        previewUrl: "#",
-      },
-      {
-        id: 4,
-        name: "Client Meeting Notes",
-        type: "notes",
-        fileType: "docx",
-        size: "0.5 MB",
-        client: {
-          id: 3,
-          name: "Emily Davis",
-          company: "Startup Innovations",
-        },
-        uploadedBy: "Jane Smith",
-        uploadedAt: "2024-01-12T16:45:00",
-        description: "Detailed notes from client meeting",
-        tags: ["meeting", "notes"],
-        downloadUrl: "#",
-        previewUrl: "#",
-      },
-      {
-        id: 5,
-        name: "Project Wireframes",
-        type: "design",
-        fileType: "image",
-        size: "3.1 MB",
-        client: {
-          id: 2,
-          name: "Mike Thompson",
-          company: "Design Studio LLC",
-        },
-        uploadedBy: "John Doe",
-        uploadedAt: "2024-01-15T10:15:00",
-        description: "Initial wireframe designs",
-        tags: ["design", "wireframe"],
-        downloadUrl: "#",
-        previewUrl: "#",
-      },
-      {
-        id: 6,
-        name: "Budget Spreadsheet",
-        type: "financial",
-        fileType: "xlsx",
-        size: "1.5 MB",
-        client: {
-          id: 4,
-          name: "Robert Wilson",
-          company: "Business Consulting Co",
-        },
-        uploadedBy: "Jane Smith",
-        uploadedAt: "2024-01-07T13:20:00",
-        description: "Project budget breakdown",
-        tags: ["financial", "budget"],
-        downloadUrl: "#",
-        previewUrl: "#",
-      },
-    ];
+    const q = collection(db, "documents");
 
-    setTimeout(() => {
-      setDocuments(mockDocuments);
-      setLoading(false);
-      // toast.success("Documents loaded successfully!");
-    }, 1000);
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const docs = snapshot.docs.map((snap) => {
+          const d = snap.data();
+          return {
+            id: snap.id,
+            name: d.name || "",
+            description: d.description || "",
+            type: d.type || "",
+            fileType: d.fileType || "",
+            size: d.size || "",
+            client: d.client || {
+              id: "",
+              name: "",
+              company: "",
+              avatar: "",
+            },
+            tags: d.tags || [],
+            uploadedBy: d.uploadedBy || "Unknown",
+            uploadedAt: d.uploadedAt || "",
+            updatedAt: d.updatedAt || "",
+            downloadUrl: d.downloadUrl || "#",
+            previewUrl: d.previewUrl || "#",
+          };
+        });
+
+        setDocuments(docs);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error loading documents:", error);
+        toast.error("Failed to load documents");
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
-  // Add new document
-  const handleAddDocument = (documentData) => {
-    const newDocument = {
-      id: Date.now(),
-      ...documentData,
-      uploadedAt: new Date().toISOString(),
-      uploadedBy: "Current User", // This would come from auth context
-    };
-    setDocuments([newDocument, ...documents]);
-    setShowUploadForm(false);
-    toast.success(`Document "${documentData.name}" uploaded successfully!`);
+  // Add new document (called from DocumentUploadForm)
+  const handleAddDocument = async (documentData) => {
+    try {
+      const payload = {
+        ...documentData,
+        uploadedBy: "Current User", // later: take from auth
+        uploadedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        downloadUrl: documentData.downloadUrl || "#",
+        previewUrl: documentData.previewUrl || "#",
+      };
+
+      await addDoc(collection(db, "documents"), payload);
+
+      setShowUploadForm(false);
+      setEditingDocument(null);
+      toast.success(`Document "${documentData.name}" uploaded successfully!`);
+    } catch (error) {
+      console.error("Error adding document:", error);
+      toast.error("Failed to upload document");
+    }
   };
 
-  // Update document
-  const handleUpdateDocument = (documentData) => {
-    setDocuments(
-      documents.map((doc) =>
-        doc.id === editingDocument.id
-          ? {
-              ...doc,
-              ...documentData,
-              updatedAt: new Date().toISOString(),
-            }
-          : doc
-      )
-    );
-    setEditingDocument(null);
-    setShowUploadForm(false);
-    toast.success("Document updated successfully!");
+  // Update existing document
+  const handleUpdateDocument = async (documentData) => {
+    if (!editingDocument?.id) {
+      toast.error("No document selected for editing");
+      return;
+    }
+
+    try {
+      const docRef = doc(db, "documents", editingDocument.id);
+
+      const payload = {
+        ...documentData,
+        // keep created info, update timestamp
+        uploadedBy: editingDocument.uploadedBy || "Current User",
+        uploadedAt: editingDocument.uploadedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        downloadUrl: editingDocument.downloadUrl || "#",
+        previewUrl: editingDocument.previewUrl || "#",
+      };
+
+      await updateDoc(docRef, payload);
+
+      setShowUploadForm(false);
+      setEditingDocument(null);
+      toast.success("Document updated successfully!");
+    } catch (error) {
+      console.error("Error updating document:", error);
+      toast.error("Failed to update document");
+    }
   };
 
   // Delete document
-  const handleDeleteDocument = (documentId) => {
+  const handleDeleteDocument = async (documentId) => {
     const documentToDelete = documents.find((doc) => doc.id === documentId);
 
-    const confirmDelete = () => {
-      setDocuments(documents.filter((doc) => doc.id !== documentId));
-      toast.success(`Document deleted successfully!`);
+    const confirmDelete = async () => {
+      try {
+        await deleteDoc(doc(db, "documents", documentId));
+        toast.success("Document deleted successfully!");
+      } catch (error) {
+        console.error("Error deleting document:", error);
+        toast.error("Failed to delete document");
+      }
     };
 
     toast.info(
@@ -207,9 +154,9 @@ const Documents = () => {
         </p>
         <div className="flex space-x-3 justify-end">
           <button
-            onClick={() => {
+            onClick={async () => {
               toast.dismiss();
-              confirmDelete();
+              await confirmDelete();
             }}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200"
           >
@@ -233,32 +180,52 @@ const Documents = () => {
     );
   };
 
-  // Download document
+  // Download document (currently simulated)
   const handleDownloadDocument = (document) => {
-    // Simulate download
+    if (!document.downloadUrl || document.downloadUrl === "#") {
+      toast.info(
+        `Download not configured yet for "${document.name}". (No file URL stored)`
+      );
+      return;
+    }
+
+    // In future: window.open(document.downloadUrl, "_blank");
     toast.info(`Downloading "${document.name}"...`);
-    // In real app, this would trigger actual download
   };
 
-  // Preview document
+  // Preview document (currently simulated)
   const handlePreviewDocument = (document) => {
-    // Simulate preview
+    if (!document.previewUrl || document.previewUrl === "#") {
+      toast.info(
+        `Preview not configured yet for "${document.name}". (No preview URL stored)`
+      );
+      return;
+    }
+
+    // In future: open preview modal or new tab
     toast.info(`Opening preview for "${document.name}"...`);
-    // In real app, this would open a preview modal
   };
 
   // Filter documents
-  const filteredDocuments = documents.filter((doc) => {
+  const filteredDocuments = documents.filter((docItem) => {
+    const search = filters.search.toLowerCase();
+
+    const name = (docItem.name || "").toLowerCase();
+    const clientName = (docItem.client?.name || "").toLowerCase();
+    const description = (docItem.description || "").toLowerCase();
+
     const matchesSearch =
-      doc.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-      doc.client.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-      doc.description.toLowerCase().includes(filters.search.toLowerCase());
+      name.includes(search) ||
+      clientName.includes(search) ||
+      description.includes(search);
 
     const matchesFileType =
-      filters.fileType === "all" || doc.type === filters.fileType;
+      filters.fileType === "all" || docItem.type === filters.fileType;
 
     const matchesClient =
-      filters.client === "all" || doc.client.id === parseInt(filters.client);
+      filters.client === "all" ||
+      docItem.client?.id === filters.client ||
+      docItem.client?.id === parseInt(filters.client, 10);
 
     return matchesSearch && matchesFileType && matchesClient;
   });
@@ -281,7 +248,7 @@ const Documents = () => {
               Document Management
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Centralized file storage for all clients - {documents.length}{" "}
+              Centralized file storage for all clients – {documents.length}{" "}
               total documents
             </p>
           </div>
@@ -293,7 +260,10 @@ const Documents = () => {
             </button>
 
             <button
-              onClick={() => setShowUploadForm(true)}
+              onClick={() => {
+                setEditingDocument(null);
+                setShowUploadForm(true);
+              }}
               className="flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-200 min-w-[120px]"
             >
               <FaCloudUploadAlt className="h-4 w-4 flex-shrink-0" />
